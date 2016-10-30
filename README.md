@@ -12,7 +12,7 @@ python ./solve.py e In cryptography, a classical cipher is a type of cipher that
 
 ### Attempt to break a cipher:
 
-python ./solve.py e th rqegkjxqmgye m romnntrmo rtgyfq tn m kegf ji rtgyfq kymk smn lnfz ytnkjqtrmooe ulk hjs ymn imoofh ijq kyf ajnk gmqk thkj ztnlnf
+python ./solve.py d th rqegkjxqmgye m romnntrmo rtgyfq tn m kegf ji rtgyfq kymk smn lnfz ytnkjqtrmooe ulk hjs ymn imoofh ijq kyf ajnk gmqk thkj ztnlnf
 murzfixytpvoahjgcqnklbsdew
 
 Notes

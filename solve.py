@@ -3,6 +3,14 @@ from random import shuffle
 import string
 import re
 import json
+import time
+
+lookup_cache = dict()
+
+debug = 0
+
+def dlog(s):
+    if debug: print s
 
 def reduce(s):
     symbols = list(string.ascii_lowercase)
@@ -19,54 +27,73 @@ def decipher(mapped_key, cipher):
     mapped_key[" "] = " "
     return "".join([mapped_key[l] for l in cipher])
 
-
-def recurse_solve(mapped_key, cipher_txt_words_s2, plain_text_words, cipher_text):
-    print "remaining words: %d" % len(cipher_txt_words_s2)
-    if len(cipher_txt_words_s2) == 0:
-        print "POSSIBLE: %s" % decipher(mapped_key, cipher_text)
-        return plain_text_words
-    cipher_txt_words_s2.sort(lambda x,y: cmp(match_ct(mapped_key,y), match_ct(mapped_key,x)))
-    wrd2 = cipher_txt_words_s2[0]
-    rgx2 = "^"
-    has_unknown = False
+def construct_expression(wrd2, mapped_key):
+    expr = "^"
     for letter in list(wrd2):
         if letter in mapped_key:
-            rgx2 += mapped_key[letter]
+            expr += mapped_key[letter]
         else:
-            rgx2 += "[a-z]"
-            has_unknown = True
+            expr += "[a-z]"
+    return re.compile(expr + "$")
 
-    rgx2 += "$"
+def get_possible_words(wrd, mapped_key):
+    expr = construct_expression(wrd, mapped_key)
+    if lookup_cache.has_key(expr.pattern):
+        return lookup_cache[expr.pattern]
+    
+    words2 = [ line.strip() for line in open('./web2') if re.search(expr, line)]
+    lookup_cache[expr.pattern] = words2
+    return words2
 
-    if  has_unknown == False:
-        plain_text_words_n = list(plain_text_words)
-        plain_text_words_n.append(wrd2);
-        plain_text_words.append(recurse_solve(mapped_key, list(cipher_txt_words_s2)[1:len(cipher_txt_words_s2)], plain_text_words_n, cipher_text))
-        return plain_text_words
+def recurse_solve(mapped_key, cipher_txt_words_s2, cipher_text, l):
+    if len(cipher_txt_words_s2) == 0:
+        dlog("POSSIBLE: %s" % decipher(mapped_key, cipher_text))
+        return decipher(mapped_key, cipher_text)
+    
+    cipher_txt_words_s2.sort(lambda x,y: cmp(match_ct(mapped_key,y), match_ct(mapped_key,x)))
+    wrd2 = cipher_txt_words_s2[0]
+    
+    #if  has_unknown == False:
+    #    plain_text_words_n = list(plain_text_words)
+    #    plain_text_words_n.append(wrd2);
+    #    plain_text_words.append(recurse_solve(mapped_key, list(cipher_txt_words_s2)[1:len(cipher_txt_words_s2)], plain_text_words_n, cipher_text, l+1))
+    #    return []
 
-
-    words2 = [ line.strip() for line in open('./web2') if re.search(re.compile(rgx2), line)]
-    words2 += [ line.strip()+"s" for line in open('./web2') if  re.search(re.compile(rgx2), line.strip()+"s")]
-    words2 += [ line.strip()+"d" for line in open('./web2') if  re.search(re.compile(rgx2), line.strip()+"d")]
-    words2 += [ line.strip()+"ed" for line in open('./web2') if  re.search(re.compile(rgx2), line.strip()+"ed")]
-
-    print rgx2
+    words2 = get_possible_words(wrd2, mapped_key)
 
     if len(words2) == 0:
-        print "no match: %s" % len(words2)
         return None
 
+    leftIndent = ""
+    for i in range(0, l):
+        leftIndent += "--"
 
+    i = 0
+    solutions = []
     for w in words2:
-        plain_text_words_n = list(plain_text_words)
-        plain_text_words_n.append(w);
+        dlog("%s %s (%d of %d)" % (leftIndent,w, i, len(words2)))
+        #plain_text_words_n = list(plain_text_words)
+        #plain_text_words_n.append(w);
         z = dict(mapped_key.items() + dict((wrd2[i], w[i]) for i in range(0,len(w))).items())
 
-        plain_text_words.append(recurse_solve(z, list(cipher_txt_words_s2)[1:len(cipher_txt_words_s2)], plain_text_words_n,cipher_text))
+        solution = recurse_solve(z, list(cipher_txt_words_s2)[1:len(cipher_txt_words_s2)], cipher_text, l+1)
+        if solution is not None: solutions.append(solution)
+        dlog("%s /%s (%d of %d)" % (leftIndent,w, i, len(words2)))
+        i += 1
 
-    return plain_text_words
+    if len(solutions) == 0: return None
+
+    return solutions
+
+def flatten_solutions(a, b):
+    if type(a) is type(''):
+        b.append(a)
+    elif type(a) is type([]):
+        for x in a:
+            flatten_solutions(x, b)
 
 def main():
+    start_time = time.time()
     if sys.argv[1] == "e":
         symbols = list(string.ascii_lowercase)
         exclude = set(string.punctuation)
@@ -105,10 +132,21 @@ def main():
 
         print "Found %d words matching pattern %s" % (len(words), wrd_reduced)
 
+        solutions = []
         for w in words:
+            dlog(w)
             d = dict((wrd[i], w[i]) for i in range(0,len(w)))
-            json.dumps(recurse_solve(d, list(cipher_txt_words_s)[1:len(cipher_txt_words_s)], [], " ".join(cipher_txt_words)))
+            solution = recurse_solve(d, list(cipher_txt_words_s)[1:len(cipher_txt_words_s)], " ".join(cipher_txt_words),1)
+            if solution is not None: solutions.append(solution)
+            dlog("/%s" % w)
 
+        
+        solutions_flat = []
+
+        flatten_solutions(solutions, solutions_flat)
+        print "Found %d total solutions in %f seconds." % (len(solutions_flat), time.time()-start_time)
+        #for k in solutions_flat:
+        #    print k
 
 
 if __name__ == "__main__":
